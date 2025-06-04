@@ -42,7 +42,7 @@ class User:
         self.click_threshold = click_threshold
         self.buy_threshold = buy_threshold
 
-    def react(self, items: pd.DataFrame) -> Tuple[list[bool], list[bool]]:
+    def react(self, items: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
         """
         Simulate user reactions to a set of recommended items.
         
