@@ -63,4 +63,6 @@ class RandomChooserUser(User):
             Each call generates new random scores, so the same items may receive
             different utility scores on different exposures.
         """
-        return np.random.rand(len(items))
+        items = items.copy()  # Ensure we don't modify the original DataFrame
+        items['score'] = np.random.rand(len(items))  # Generate random scores
+        return items['score']
