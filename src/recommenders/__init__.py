@@ -1,1 +1,1 @@
-from .baseline import RandomRecommender
+from .baseline import RandomRecommender, PopularityRecommender
