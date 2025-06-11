@@ -9,22 +9,25 @@ from src.users import User
 
 class ShopEnv(gym.Env):
     """GYM environment for recommender agent interacting with users."""
-    def __init__(self, user: User, items: pd.DataFrame) -> None:
+    def __init__(self, items: pd.DataFrame) -> None:
         """Initialize environment with a user model and item catalog.
         Args:
             user (User): User behavior model.
             items (pd.DataFrame): Catalog of items to recommend.
         """
-        self.user = user
         self.items = items
+        self.shown_items = set()  # Track shown items to avoid duplicates
         self.encoded_items = self.encode_items(items)
         self.candidates = self._get_candidates()
         self.num_users = 5 # Hardcoding the the number of unique users for now
         self.item_feature_dim = 30 # hardcoding for now
         self.items_per_page = 10 
+        self.coverage = 0.0 # percentage of items shown to user
+        self.ctr = 0.0  # Click-through rate
+        self.btr = 0.0  # Buy-through rate
 
-        self.click_weight = 0.5
-        self.buy_weight = 1.0
+        self.click_weight = 1.0
+        self.buy_weight = 2.0
 
         # Action is boolean vector with 1s on the ids of chosen items from catalog
         self.action_space = MultiBinary(len(items))
@@ -40,17 +43,14 @@ class ShopEnv(gym.Env):
             "candidates": Box(low=-np.inf, high=+np.inf, shape=(len(self.encoded_items), self.item_feature_dim)), # Matrix N items x F_dim features
         }) 
         self.done_criteria = {
-            "consecutive_no_click_pages": 3,  # End if no clicks for 3 consecutive pages
-            "page_count": 10,                  # End after 10 pages
-            "click_count": 10,                 # End after 10 clicks
-            "buy_count": 5                      # End after 5 buys
+            "consecutive_no_click_pages": 3,  
+            "page_count": 10,                  
+            "click_count": 10,                 
+            "buy_count": 5                      
         }
-        self.shown_items = set()  # Track shown items to avoid duplicates
 
-    def reset(self) -> dict:
+    def reset(self, user: User) -> dict:
         """Reset state and return initial observation."""
-        self.user.reset()
-
         self.history = {
             "page_count": 0,
             "click_count": 0,
@@ -60,33 +60,39 @@ class ShopEnv(gym.Env):
         }
         self.shown_items.clear()
         self.candidates = self._get_candidates()
+        self.coverage = 0.0
+        self.ctr = 0.0
+        self.btr = 0.0
 
-        return self.get_observation()
+        return self.get_observation(user)
     
     def _get_candidates(self) -> pd.DataFrame:
         """Retrieve current candidate items."""
-        return self.encoded_items
+        available_items = self.encoded_items[~self.encoded_items.product_id.isin(self.shown_items)]
+        return available_items.reset_index(drop=True)
     
     def encode_items(self, items: pd.DataFrame) -> pd.DataFrame:
         """Convert raw items into feature-encoded representation."""
         return items
     
-    def get_observation(self) -> dict:
+    def get_observation(self, user: User) -> dict:
         """Compile and return observation dict for agent."""
         return {
-            "user": self.user.username,  # Assuming user has a username attribute
+            "user": user.username,  # Assuming user has a username attribute
             "history": self.history,
             "candidates": self.candidates
         }
 
 
-    def step(self, action) -> Tuple[dict, float, bool, dict]:
+    def step(self, action: np.ndarray, user: User) -> Tuple[dict, float, bool, dict]:
         """Execute action, update state, compute reward, and return (obs, reward, done, info)."""
         done = False
+        # TAKE ACTION
         action_indices = np.where(action)[0]
-        items_to_show = self.items.loc[action_indices]
+        items_to_show = self.candidates.loc[action_indices]
+        clicked_items, bought_items = user.react(items_to_show)
+
         # REWARD CALCULATION
-        clicked_items, bought_items = self.user.react(items_to_show)
         ctr, btr = clicked_items.mean(), bought_items.mean()
         reward = self.click_weight * ctr + self.buy_weight * btr
         info = {
@@ -98,18 +104,21 @@ class ShopEnv(gym.Env):
         }
 
         # STATE UPDATE
-        self.shown_items.update(np.where(action)[0])  # Update shown items with the current action
-        self.candidates = self._get_candidates()
         self.history["page_count"] += 1
+        self.shown_items.update(items_to_show.product_id.tolist())  # Update shown items with the current action
+        self.coverage = len(self.shown_items) / len(self.encoded_items)
+        self.ctr = self.ctr + (ctr - self.ctr) / self.history["page_count"]
+        self.btr = self.btr + (btr - self.btr) / self.history["page_count"]
+        self.candidates = self._get_candidates()
 
         if ctr > 0:
-            self.history["click_count"] += 1
-            self.history["last_click_item"] = np.where(clicked_items)[0][-1] if clicked_items.any() else None
+            self.history["click_count"] += sum(clicked_items)
+            self.history["last_click_item"] = items_to_show.iloc[np.where(clicked_items)[0][-1]].product_id
             self.history["consecutive_no_click_pages"] = 0
         else:
             self.history["consecutive_no_click_pages"] += 1
         if btr > 0:
-            self.history["buy_count"] += 1
+            self.history["buy_count"] += sum(bought_items)
         
         # DONE CONDITIONS
         done_conditions = [
@@ -120,5 +129,5 @@ class ShopEnv(gym.Env):
         ]
         done = any(done_conditions)
 
-        return self.get_observation(), reward, done, info
+        return self.get_observation(user), reward, done, info
 
