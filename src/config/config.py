@@ -1,3 +1,4 @@
+from typing import Any
 class Config:
     def __init__(self):
         BRAND_WEIGHTS = {
@@ -32,11 +33,28 @@ class Config:
                 "value_optimizer": {"click_threshold": 0.7, "buy_threshold": 0.85},
                 "familiarity_seeker": {"click_threshold": 0.6, "buy_threshold": 0.80},
                 "random_chooser": {"click_threshold": 0.85, "buy_threshold": 0.97},
-            }
+            },
+            "users_list": [
+                "cheap_seeker",
+                "brand_lover",
+                "value_optimizer",
+                "familiarity_seeker",
+                "random_chooser"
+            ],
+            "catalog": {
+                "cat_features": ["category", "subcategory", "brand", "color"],
+                "num_features": ['price', 'quality_score', 'popularity', 'release_days'],
+            },
+            "models": {
+                "model_path": "src/models/ppo_shop_env.zip",
+            },
+            "num_candidates": 50,
+            "num_recommendations": 10,
+            "catalog_path": "src/data/catalog.csv",
         }
 
-    def get(self, key):
-        return self._config.get(key)
+    def get(self, key: str, default: Any=None) -> Any:
+        return self._config.get(key, default)
 
-    def set(self, key, value):
+    def set(self, key: str, value: Any):
         self._config[key] = value

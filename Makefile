@@ -1,2 +1,8 @@
-run-app:
-	uv run python -m streamlit run src/interface/app.py
+run:
+	uv run python -m streamlit run src/interface/app.py --server.fileWatcherType none
+
+train:
+	uv run python -m src.scripts.train
+
+evaluate:
+	uv run python -m src.scripts.evaluate
