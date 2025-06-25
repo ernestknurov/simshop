@@ -33,7 +33,7 @@ class ShopEnv(gym.Env):
         self.num_candidates = config.get('num_candidates')
         self.num_users = len(config.get("users_list"))
 
-        self.items_per_page = 10 
+        self.items_per_page = config.get("num_recommendations") 
         self.coverage = 0.0 # percentage of items shown to user
         self.ctr = 0.0  # Click-through rate
         self.btr = 0.0  # Buy-through rate
