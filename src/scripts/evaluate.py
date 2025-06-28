@@ -88,7 +88,7 @@ def main():
     print(f"Metrics will be saved to: {args.results_path}")
 
     config = Config()
-    catalog = load_catalog(config.get("catalog_path")).sample(50, random_state=42)
+    catalog = load_catalog(config.get("catalog_path"))#.sample(50, random_state=42)
 
     name_to_recommender = {
         "random": RandomRecommender(),

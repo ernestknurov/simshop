@@ -6,7 +6,7 @@ from gymnasium.spaces import MultiBinary, Dict, Box, Discrete
 
 from typing import Tuple
 from src.users import User 
-from src.data.encoders import encode_items, user_to_one_hot
+from src.data.encoders import encode_items_with_embeddings, user_to_one_hot
 from src.config import Config
 
 config = Config()
@@ -20,14 +20,13 @@ class ShopEnv(gym.Env):
         """
         super().__init__()
         self.items = items
-        self.user = user  # Factory to create user instances
+        self.user = user
 
-        self.shown_items = set()  # Track shown items to avoid duplicates
+        self.shown_items = set()
         self.cat_features = config.get("catalog")["cat_features"]
  
         self.num_features = config.get("catalog")["num_features"]
-        self.encoded_items = encode_items(items, self.cat_features)
-        self.one_hot_cat_features = [col for col in self.encoded_items.columns if col.startswith(tuple(self.cat_features))]
+        self.encoded_items, self.vocab_mappings = encode_items_with_embeddings(items, self.cat_features)
         self.one_hot_user = user_to_one_hot(self.user.username, config.get("users_list"))
 
         self.num_candidates = config.get('num_candidates')
@@ -47,7 +46,7 @@ class ShopEnv(gym.Env):
 
         self.observation_space = Dict({
             "user": Box(low=0, high=1, shape=(len(self.one_hot_user),), dtype=np.int8),
-            "candidates_cat_features": Box(low=0, high=1, shape=(self.num_candidates, len(self.one_hot_cat_features)), dtype=np.int8),
+            "candidates_cat_features": Box(low=0, high=127, shape=(self.num_candidates, len(self.cat_features)), dtype=np.int8),
             "candidates_num_features": Box(low=0.0, high=np.inf, shape=(self.num_candidates, len(self.num_features)), dtype=np.float32),
             # "history": Dict({
             #     "page_count": Box(low=0, high=np.inf, shape=(), dtype=np.int32), # Number of pages visited
@@ -97,7 +96,7 @@ class ShopEnv(gym.Env):
         """Compile and return observation dict for agent."""
         return {
             "user": self.one_hot_user, 
-            "candidates_cat_features": self.candidates[self.one_hot_cat_features].values.astype(np.int8),
+            "candidates_cat_features": self.candidates[self.cat_features].values.astype(np.int8),
             "candidates_num_features": self.candidates[self.num_features].values.astype(np.float32),
             # "history": self.history,
         }
@@ -109,7 +108,6 @@ class ShopEnv(gym.Env):
 
         # TAKE ACTION
         action_indices = np.where(action)[0]
-        # print(f"Action vector length: {len(action)}, 1s count: {np.sum(action)}")
         items_to_show = self.candidates.loc[action_indices] # encoded items
         items_to_show = self.items.loc[self.items['product_id'].isin(items_to_show['product_id'])].reset_index(drop=True) # original items
         clicked_items, bought_items = self.user.react(items_to_show)

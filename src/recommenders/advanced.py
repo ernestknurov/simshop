@@ -1,27 +1,12 @@
 import numpy as np
-import torch.nn as nn
+
 from stable_baselines3 import PPO
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.callbacks import BaseCallback
+
 from src.env import ShopEnv
-from src.policies import TopKMultiInputPolicy
-
-
-
-class DebugCallback(BaseCallback):
-    """
-    Callback for debugging: prints observations, actions, and rewards at each step.
-    """
-    def _on_step(self) -> bool:
-        obs = self.locals.get('new_obs')
-        actions = self.locals.get('actions', None)
-        if actions is None:
-            actions = self.locals.get('action')
-        rewards = self.locals.get('rewards')
-        print(f"Debug Step - Obs: {obs}, Action: {actions}, Reward: {rewards}")
-        return True
+from src.policies import TopKMultiInputPolicy, EmbeddingItemEncoder
 
 
 class RLRecommender:
@@ -37,28 +22,44 @@ class RLRecommender:
                 ))
 
         self.vec_env = DummyVecEnv([make_env(username) for username in env_params['users_subset']])
-        # self.model = PPO(TopKMultiInputPolicy, self.vec_env, verbose=1, policy_kwargs={"k": num_recommendations},)
+        
         policy_kwargs = {
             "k": num_recommendations,
-            # net_arch can be a list of dicts for PPO’s π- and V-heads:
+            "features_extractor_class": EmbeddingItemEncoder,
+            "features_extractor_kwargs": {"features_dim": 128},
+            "share_features_extractor": True, 
             "net_arch": dict(
-                    pi=[512, 512],   # two hidden layers of 256 units for the policy head
-                    vf=[512, 512]
-                ),   # two hidden layers of 256 units for the value head,
-            "activation_fn": nn.ReLU  # or nn.Tanh if you prefer
+                pi=[128, 128],  
+                vf=[128, 128]
+            ),
         }
+        
         self.model = PPO(
             TopKMultiInputPolicy,
             self.vec_env,
             verbose=1,
             policy_kwargs=policy_kwargs,
-            n_steps=4096,
-            batch_size=256,
-            n_epochs=10,
+            # n_steps=4096,
+            # batch_size=256,
+            # n_epochs=10,
         )
-       # Use DebugCallback to log step-by-step if debug mode enabled
-        callback = DebugCallback() if debug else None
-        self.model.learn(total_timesteps=total_timesteps, progress_bar=True, callback=callback)
+        if debug:
+            # Debug: Print model architecture
+            print("\n[DEBUG] Model architecture:")
+            print(self.model.policy)
+            
+            # Debug: Check feature extractor type
+            feature_extractor = self.model.policy.features_extractor
+            print(f"\n[DEBUG] Feature extractor type: {type(feature_extractor)}")
+            print(f"[DEBUG] Is SharedItemEncoder: {isinstance(feature_extractor, EmbeddingItemEncoder)}")
+            
+            # Debug: Count parameters
+            total_params = sum(p.numel() for p in self.model.policy.parameters())
+            feature_extractor_params = sum(p.numel() for p in feature_extractor.parameters())
+            print(f"[DEBUG] Total policy parameters: {total_params:,}")
+            print(f"[DEBUG] Feature extractor parameters: {feature_extractor_params:,}")
+
+        self.model.learn(total_timesteps=total_timesteps, progress_bar=True)
         self.evaluate(100)
 
     def load_model(self, model_path: str, **kwargs):
