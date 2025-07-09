@@ -2,7 +2,7 @@ import numpy as np
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.evaluation import evaluate_policy
-from stable_baselines3.common.vec_env import DummyVecEnv
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 from stable_baselines3.common.monitor import Monitor
 
 from src.env import ShopEnv
@@ -13,7 +13,7 @@ class RLRecommender:
     def __init__(self):
         self.model = None
 
-    def train(self, env_params: dict, num_recommendations: int, total_timesteps: int=2048, debug: bool=False):
+    def train(self, env_params: dict, num_recommendations: int, total_timesteps: int=2048, debug: bool=False, callback=None):
         print(f"Training model for {total_timesteps} timesteps on environment ShopEnv")
         def make_env(username: str):
             return lambda: Monitor(ShopEnv(
@@ -21,7 +21,7 @@ class RLRecommender:
                 user=env_params['username_to_user'][username]
                 ))
 
-        self.vec_env = DummyVecEnv([make_env(username) for username in env_params['users_subset']])
+        self.vec_env = SubprocVecEnv([make_env(username) for username in env_params['users_subset']*2]) # 3 * 2 = 6
         
         policy_kwargs = {
             "k": num_recommendations,
@@ -59,7 +59,7 @@ class RLRecommender:
             print(f"[DEBUG] Total policy parameters: {total_params:,}")
             print(f"[DEBUG] Feature extractor parameters: {feature_extractor_params:,}")
 
-        self.model.learn(total_timesteps=total_timesteps, progress_bar=True)
+        self.model.learn(total_timesteps=total_timesteps, progress_bar=True, callback=callback)
         self.evaluate(100)
 
     def load_model(self, model_path: str, **kwargs):

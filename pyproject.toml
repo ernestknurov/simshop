@@ -12,10 +12,12 @@ dependencies = [
     "stable-baselines3[extra]>=2.6.0",
     "streamlit>=1.45.1",
     "torch>=2.7.1",
+    "wandb>=0.21.0",
 ]
 
 [dependency-groups]
 dev = [
     "ipykernel>=6.29.5",
     "ipywidgets>=8.1.7",
+    "line-profiler>=4.2.0",
 ]

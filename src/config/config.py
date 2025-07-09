@@ -50,6 +50,8 @@ class Config:
             },
             "num_candidates": 50,
             "num_recommendations": 10,
+            "catalog_size": 250,
+            "n_last_clicks": 5,
             "catalog_path": "src/data/catalog.csv",
         }
 

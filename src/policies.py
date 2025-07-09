@@ -16,6 +16,7 @@ class EmbeddingItemEncoder(BaseFeaturesExtractor):
         # Get dimensions from observation space
         self.num_candidates = observation_space["candidates_cat_features"].shape[0]
         self.num_features_dim = observation_space["candidates_num_features"].shape[1]
+        self.num_clicked_items = observation_space['history_n_last_click_items_num_features'].shape[0]
         self.user_dim = observation_space["user"].shape[0]
         self.embed_dim = embed_dim
         
@@ -34,9 +35,9 @@ class EmbeddingItemEncoder(BaseFeaturesExtractor):
         self.color_embed = nn.Embedding(self.vocab_sizes['color'], embed_dim)
         
         # Item encoder - now processes embeddings + numerical features
-        item_input_dim = 4 * embed_dim + self.num_features_dim  # 4 embeddings + numerical
+        self.item_input_dim = 4 * embed_dim + self.num_features_dim  # 4 embeddings + numerical
         self.item_encoder = nn.Sequential(
-            nn.Linear(item_input_dim, 64),
+            nn.Linear(self.item_input_dim, 64),
             nn.ReLU(),
             nn.Dropout(0.1),
             nn.Linear(64, 32)
@@ -45,19 +46,16 @@ class EmbeddingItemEncoder(BaseFeaturesExtractor):
         # User encoder (unchanged)
         self.user_encoder = nn.Sequential(
             nn.Linear(self.user_dim, 32),
-            # nn.ReLU(),
-            # nn.Linear(32, 16)
+            nn.ReLU(),
+            nn.Linear(32, 32)
         )
-        
-        # User projection for attention (16 → 32)
-        # self.user_projection = nn.Linear(16, 32)
         
         # Attention mechanism
         self.attention = nn.MultiheadAttention(embed_dim=32, num_heads=4, batch_first=True)
         
         # Feature combiner
         self.feature_combiner = nn.Sequential(
-            nn.Linear(32 + 32 + 32, features_dim),  # user + attended_items + item_stats
+            nn.Linear(32 + 32 + 32 + 32, features_dim),  # user + attended_candidates_stats + candidates_stats + history_stats
             nn.ReLU(),
             nn.Dropout(0.1),
             nn.Linear(features_dim, features_dim)
@@ -67,40 +65,96 @@ class EmbeddingItemEncoder(BaseFeaturesExtractor):
         batch_size = observations["user"].shape[0]
         
         # Process user features
-        user_features = self.user_encoder(observations["user"])  # (batch, 16)
+        user_features = self.user_encoder(observations["user"])  # (batch, 32)
         
         # Get categorical indices (assuming they come as indices, not one-hot)
-        cat_indices = observations["candidates_cat_features"].long()  # (batch, num_candidates, cat_dim)
-        num_features = observations["candidates_num_features"]  # (batch, num_candidates, num_dim)
+        candidates_cat_features = observations["candidates_cat_features"].long()  # (batch, num_candidates, cat_dim)
+        candidates_num_features = observations["candidates_num_features"]  # (batch, num_candidates, num_dim)
+        clicked_items_cat_features = observations['history_n_last_click_items_cat_features'].long() # (batch, num_clicked_items, cat_dim)
+        clicked_items_num_features = observations['history_n_last_click_items_num_features'] # (batch, num_clicked_items, num_dim)
+        clicked_items_mask = observations['history_n_last_click_items_mask'].float() # (batch, num_clicked_items)
         
+        # ------------apply items transformations for candidates items----------------------------------------------------------------
+
         # Apply embeddings to each categorical feature
-        category_emb = self.category_embed(cat_indices[:, :, 0])    # (batch, num_candidates, embed_dim)
-        subcategory_emb = self.subcategory_embed(cat_indices[:, :, 1])
-        brand_emb = self.brand_embed(cat_indices[:, :, 2])
-        color_emb = self.color_embed(cat_indices[:, :, 3])
+        category_emb = self.category_embed(candidates_cat_features[:, :, 0])    # (batch, num_candidates, embed_dim)
+        subcategory_emb = self.subcategory_embed(candidates_cat_features[:, :, 1])
+        brand_emb = self.brand_embed(candidates_cat_features[:, :, 2])
+        color_emb = self.color_embed(candidates_cat_features[:, :, 3])
         
         # Concatenate all embeddings + numerical features
-        item_features = torch.cat([
-            category_emb, subcategory_emb, brand_emb, color_emb, num_features
+        candidates_item_features = torch.cat([
+            category_emb, subcategory_emb, brand_emb, color_emb, candidates_num_features
         ], dim=-1)  # (batch, num_candidates, 4*embed_dim + num_features)
         
         # Apply shared encoder to all items
-        batch_items = item_features.view(-1, 4 * self.embed_dim + self.num_features_dim)
-        encoded_items = self.item_encoder(batch_items)  # (batch * num_candidates, 32)
-        encoded_items = encoded_items.view(batch_size, self.num_candidates, 32)
+        candidates_batch_items = candidates_item_features.view(-1, self.item_input_dim)
+        encoded_candidates_items = self.item_encoder(candidates_batch_items)  # (batch * num_candidates, 32)
+        encoded_candidates_items = encoded_candidates_items.view(batch_size, self.num_candidates, 32)
+
+        # ------------apply items transformations for user preference items----------------------------------------------------------------
+
+        # Apply embeddings to each categorical feature
+        category_emb = self.category_embed(clicked_items_cat_features[:, :, 0])    # (batch, clicked_items, embed_dim)
+        subcategory_emb = self.subcategory_embed(clicked_items_cat_features[:, :, 1])
+        brand_emb = self.brand_embed(clicked_items_cat_features[:, :, 2])
+        color_emb = self.color_embed(clicked_items_cat_features[:, :, 3])
         
-        # User-item attention - project user features to match attention dimension
-        # user_query = self.user_projection(user_features).unsqueeze(1)  # (batch, 1, 32)
-        user_query = user_features.unsqueeze(1)  # (batch, 1, 32)
+        # Concatenate all embeddings + numerical features + 1 (mask)
+        clicked_item_features = torch.cat([
+            category_emb, subcategory_emb, brand_emb, color_emb, clicked_items_num_features
+        ], dim=-1)  # (batch, num_clicked_items, 4*embed_dim + num_features)
         
-        attended_items, _ = self.attention(user_query, encoded_items, encoded_items)
-        attended_items = attended_items.squeeze(1)  # (batch, 32)
+        # Apply shared encoder to all items
+        clicked_batch_items = clicked_item_features.view(-1, self.item_input_dim)
+        encoded_clicked_items = self.item_encoder(clicked_batch_items)  # (batch * num_clicked_items, 32)
+        encoded_clicked_items = encoded_clicked_items.view(batch_size, self.num_clicked_items, 32)
         
-        # Aggregate item statistics
-        item_stats = torch.mean(encoded_items, dim=1)  # (batch, 32)
+        # ----------------------------------------------------------------------------
+        # encoded_candidates_items: (batch, num_candidates, 32)
+        # encoded_clicked_items:   (batch, num_clicked_items, 32)
+        # clicked_items_mask:      (batch, num_clicked_items)
+
+        pad_mask = clicked_items_mask.eq(0)    # (batch, num_clicked_items)
+
+        all_sequences_masked = pad_mask.all(dim=1)  # Check each batch item)
+        
+        # Handle cold start: if no history, skip attention and use candidates as fallback
+        if all_sequences_masked.any():
+            print(f"[DEBUG] Cold start detected - using candidates_item_stats as fallback for attention")
+            # For cold start users, use candidates statistics instead of attention
+            attended_candidates = encoded_candidates_items.clone()
+        else:
+            # for given history of clicked items, which candidates to attend to?
+            attended_candidates, _ = self.attention(
+                query=encoded_candidates_items,                # (batch, num_candidates, 32)
+                key=encoded_clicked_items,                     # (batch, num_clicked_items, 32)
+                value=encoded_clicked_items,                   # (batch, num_clicked_items, 32)
+                key_padding_mask=pad_mask                      # (batch, num_clicked_items)
+            )
+        # → attended_cands: (batch, num_candidates, 32)
+        
+        # Aggregate item statistics - apply mask to avoid including padded items
+        attended_candidates_stats = torch.mean(attended_candidates, dim=1)  # (batch, 32)
+        candidates_item_stats = torch.mean(encoded_candidates_items, dim=1)  # (batch, 32)
+        
+        # For clicked items, mask out padded items before computing mean
+        valid_mask = clicked_items_mask.unsqueeze(-1)  # (batch, num_clicked_items, 1)
+        masked_clicked_items = encoded_clicked_items * valid_mask  # Zero out padded items
+        
+        # Compute mean only over valid items
+        sum_clicked_items = torch.sum(masked_clicked_items, dim=1)  # (batch, 32)
+        count_valid_items = torch.sum(clicked_items_mask, dim=1, keepdim=True)  # (batch, 1)
+        count_valid_items = torch.clamp(count_valid_items, min=1)  # Avoid division by zero
+        clicked_item_stats = sum_clicked_items / count_valid_items  # (batch, 32)
         
         # Combine all features
-        combined_features = torch.cat([user_features, attended_items, item_stats], dim=-1)
+        combined_features = torch.cat([
+            user_features, 
+            attended_candidates_stats, 
+            candidates_item_stats, 
+            clicked_item_stats
+            ], dim=-1)
         
         return self.feature_combiner(combined_features)
 

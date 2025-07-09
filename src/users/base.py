@@ -62,15 +62,25 @@ class User:
             - Items can only be bought if they were first clicked
             - Purchase probability is linear between click_threshold and buy_threshold
         """
-        
-        items = items.copy()
-        items['score'] = self.utility(items)
-        items['clicked'] = (items['score'] >= self.click_threshold).astype(int)
-        span = self.buy_threshold - self.click_threshold
-        items['bought_prob'] = ((items['score'] - self.click_threshold) / span).clip(0, 1)
-        items['bought'] = (np.random.rand(len(items)) < items['bought_prob']).astype(int)
 
-        return items['clicked'].to_numpy(), items['bought'].to_numpy()
+        scores = self.utility(items)  # returns np.ndarray or Series
+
+        clicked = (scores >= self.click_threshold).astype(np.uint8)
+
+        # Avoid unnecessary pandas ops — use vectorized NumPy
+        span = self.buy_threshold - self.click_threshold
+        buy_prob = np.clip((scores - self.click_threshold) / span, 0, 1)
+        bought = ((np.random.rand(len(scores)) < buy_prob) & (clicked == 1)).astype(np.uint8)
+
+        return clicked, bought
+        # items = items.copy()
+        # items['score'] = self.utility(items)
+        # items['clicked'] = (items['score'] >= self.click_threshold).astype(int)
+        # span = self.buy_threshold - self.click_threshold
+        # items['bought_prob'] = ((items['score'] - self.click_threshold) / span).clip(0, 1)
+        # items['bought'] = (np.random.rand(len(items)) < items['bought_prob']).astype(int)
+
+        # return items['clicked'].to_numpy(), items['bought'].to_numpy()
     
     def utility(self, items: pd.DataFrame) -> pd.Series:
         """

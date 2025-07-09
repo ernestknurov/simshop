@@ -31,6 +31,7 @@ class ShopEnv(gym.Env):
 
         self.num_candidates = config.get('num_candidates')
         self.num_users = len(config.get("users_list"))
+        self.n_last_clicks = config.get("n_last_clicks")
 
         self.items_per_page = config.get("num_recommendations") 
         self.coverage = 0.0 # percentage of items shown to user
@@ -38,8 +39,8 @@ class ShopEnv(gym.Env):
         self.btr = 0.0  # Buy-through rate
         self.episode_count = 0
 
-        self.click_weight = 1.0
-        self.buy_weight = 2.0
+        self.click_weight = 3.0
+        self.buy_weight = 6.0
 
         # Action is boolean vector with 1s on the ids of chosen items from catalog
         self.action_space = MultiBinary(self.num_candidates)
@@ -48,6 +49,9 @@ class ShopEnv(gym.Env):
             "user": Box(low=0, high=1, shape=(len(self.one_hot_user),), dtype=np.int8),
             "candidates_cat_features": Box(low=0, high=127, shape=(self.num_candidates, len(self.cat_features)), dtype=np.int8),
             "candidates_num_features": Box(low=0.0, high=np.inf, shape=(self.num_candidates, len(self.num_features)), dtype=np.float32),
+            "history_n_last_click_items_cat_features": Box(low=0, high=127, shape=(self.n_last_clicks, len(self.cat_features)), dtype=np.int8),
+            "history_n_last_click_items_num_features": Box(low=0.0, high=np.inf, shape=(self.n_last_clicks, len(self.num_features)), dtype=np.float32),
+            "history_n_last_click_items_mask": Box(low=0, high=1, shape=(self.n_last_clicks,), dtype=np.int8)
             # "history": Dict({
             #     "page_count": Box(low=0, high=np.inf, shape=(), dtype=np.int32), # Number of pages visited
             #     "click_count": Box(low=0, high=np.inf, shape=(), dtype=np.int32), # Number of clicks
@@ -62,6 +66,13 @@ class ShopEnv(gym.Env):
             "click_count": 10,                 
             "buy_count": 5                      
         }
+        self.n_last_click_items = pd.DataFrame(
+            0, 
+            index=range(self.n_last_clicks), 
+            columns=self.cat_features + self.num_features, 
+            dtype=np.float32
+        )
+        self.n_last_click_items_mask = np.zeros(self.n_last_clicks, dtype=np.int8)
 
     def reset(self, seed=None, options=None) -> Tuple[dict, dict]:
         """Reset state and return initial observation."""
@@ -81,6 +92,7 @@ class ShopEnv(gym.Env):
         self.ctr = 0.0
         self.btr = 0.0
         self.episode_count += 1
+        self.done = False
 
         return self.get_observation(), {}
     
@@ -98,13 +110,17 @@ class ShopEnv(gym.Env):
             "user": self.one_hot_user, 
             "candidates_cat_features": self.candidates[self.cat_features].values.astype(np.int8),
             "candidates_num_features": self.candidates[self.num_features].values.astype(np.float32),
+            "history_n_last_click_items_cat_features": self.n_last_click_items[self.cat_features].values.astype(np.int8),
+            "history_n_last_click_items_num_features": self.n_last_click_items[self.num_features].values.astype(np.float32),
+            "history_n_last_click_items_mask": self.n_last_click_items_mask,
             # "history": self.history,
         }
 
-
+    # @profile
     def step(self, action: np.ndarray) -> Tuple[dict, float, bool, bool, dict]:
         """Execute action, update state, compute reward, and return (obs, reward, done, truncated, info)."""
-        done = False
+        if self.done:
+            raise RuntimeError("Environment is done. Please reset it before calling step().")
 
         # TAKE ACTION
         action_indices = np.where(action)[0]
@@ -115,6 +131,8 @@ class ShopEnv(gym.Env):
         # REWARD CALCULATION
         ctr, btr = clicked_items.mean(), bought_items.mean()
         reward = self.click_weight * ctr + self.buy_weight * btr
+        if ctr == 0:
+            reward -= 0.1  # small penalty for no clicks
         info = {
             "recommended_items": items_to_show,
             "clicked_items": clicked_items,
@@ -131,6 +149,14 @@ class ShopEnv(gym.Env):
         self.coverage = len(self.shown_items) / len(self.encoded_items)
         self.ctr = self.ctr + (ctr - self.ctr) / self.history["page_count"]
         self.btr = self.btr + (btr - self.btr) / self.history["page_count"]
+        if ctr > 0:
+            n_last_clicks_items_ids = items_to_show[clicked_items.astype(bool)].product_id
+            candidates_mask = self.candidates.product_id.isin(n_last_clicks_items_ids)
+            self.n_last_click_items = pd.concat([self.n_last_click_items, self.candidates[candidates_mask]]).tail(self.n_last_clicks)
+            if any(1 - self.n_last_click_items_mask): # if there are empty slots in n_last_click_items_mask
+                num_clicks = sum(clicked_items)
+                self.n_last_click_items_mask = np.roll(self.n_last_click_items_mask, -num_clicks)
+                self.n_last_click_items_mask[-num_clicks:] = 1
         self.candidates = self._get_candidates()
 
         if ctr > 0:
@@ -149,7 +175,7 @@ class ShopEnv(gym.Env):
             self.history["click_count"] >= self.done_criteria["click_count"],
             self.history["buy_count"] >= self.done_criteria["buy_count"]
         ]
-        done = any(done_conditions)
+        self.done = any(done_conditions)
 
-        return self.get_observation(), reward, done, False, info
+        return self.get_observation(), reward, self.done, False, info
 
