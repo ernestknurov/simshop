@@ -8,7 +8,7 @@ config = Config()
 
 def load_catalog(path: str) -> pd.DataFrame:
     df = pd.read_csv(path, parse_dates=['release_date'])
-    df['release_days'] = (df['release_date'] - pd.Timestamp("1970-01-01")).dt.days
+    df['days_since_release'] = (pd.Timestamp.now() - df['release_date']).dt.days
     return df
 
 def action_to_indices(action):
