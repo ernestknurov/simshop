@@ -113,7 +113,6 @@ class ShopEnv(gym.Env):
             "history_n_last_click_items_cat_features": self.n_last_click_items[self.cat_features].values.astype(np.int8),
             "history_n_last_click_items_num_features": self.n_last_click_items[self.num_features].values.astype(np.float32),
             "history_n_last_click_items_mask": self.n_last_click_items_mask,
-            # "history": self.history,
         }
 
     # @profile

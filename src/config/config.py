@@ -33,26 +33,33 @@ class Config:
                 "value_optimizer": {"click_threshold": 0.7, "buy_threshold": 0.85},
                 "familiarity_seeker": {"click_threshold": 0.6, "buy_threshold": 0.80},
                 "random_chooser": {"click_threshold": 0.85, "buy_threshold": 0.97},
+                "freshness_looker": {"click_threshold": 0.80, "buy_threshold": 0.95},
             },
             "users_list": [
                 "cheap_seeker",
                 "brand_lover",
                 "value_optimizer",
                 "familiarity_seeker",
-                "random_chooser"
+                "random_chooser",
+                "freshness_looker"
             ],
             "catalog": {
                 "cat_features": ["category", "subcategory", "brand", "color"],
-                "num_features": ['price', 'quality_score', 'popularity', 'release_days'],
+                "num_features": ['price', 'quality_score', 'popularity', 'days_since_release'],
             },
             "models": {
-                "model_path": "src/models/ppo_shop_env.zip",
+                "model_path": "models/rl_recommender.zip",
             },
             "num_candidates": 50,
             "num_recommendations": 10,
             "catalog_size": 250,
             "n_last_clicks": 5,
-            "catalog_path": "src/data/catalog.csv",
+            "catalog_path": "data/catalog.csv",
+            "features_extractor_kwargs": {"features_dim": 256},
+            "net_arch": dict(
+                pi=[128, 128],  
+                vf=[128, 128]
+            ),
         }
 
     def get(self, key: str, default: Any=None) -> Any:

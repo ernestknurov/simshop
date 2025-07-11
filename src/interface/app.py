@@ -10,7 +10,6 @@ from src.recommenders import (
     PopularityRecommender,
 )
 from src.utils import (
-    action_to_indices,
     load_catalog,
     username_to_user
 )

@@ -10,12 +10,15 @@ from src.utils import (
     load_catalog,
     username_to_user
 )
+from src.utils.logger import get_logger
 from src.env import ShopEnv
 from src.recommenders import (
     RandomRecommender,
     PopularityRecommender,
     RLRecommender
 )
+
+logger = get_logger(__name__, level="DEBUG")
 
 def parse_args():
     """
@@ -82,10 +85,10 @@ def main():
     start_time = time.time()
 
     args = parse_args()
-    print("\nStarting evaluation process...")
-    print(f"Eval episodes: {args.eval_episodes}")
-    print(f"RL model will be loaded from: {args.rl_model_path}")
-    print(f"Metrics will be saved to: {args.results_path}")
+    logger.info("\nStarting evaluation process...")
+    logger.info(f"Eval episodes: {args.eval_episodes}")
+    logger.info(f"RL model will be loaded from: {args.rl_model_path}")
+    logger.info(f"Metrics will be saved to: {args.results_path}")
 
     config = Config()
     catalog = load_catalog(config.get("catalog_path"))#.sample(50, random_state=42)
@@ -97,12 +100,12 @@ def main():
     }
     name_to_recommender['rl'].load_model(args.rl_model_path)
     report = compare_recommenders(catalog, name_to_recommender, args.eval_episodes, config.get("num_recommendations"), args.verbose)
-    print(report)
+    logger.info(report)
     report.to_csv(args.results_path, index=False)
 
     end_time = time.time()
     elapsed_time = end_time - start_time
-    print(f"Execution time: {elapsed_time:.2f} seconds")
+    logger.info(f"Execution time: {elapsed_time:.2f} seconds")
 
 if __name__ == "__main__":
     main()

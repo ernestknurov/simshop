@@ -4,6 +4,9 @@ import random
 from datetime import datetime, timedelta
 from faker import Faker
 import numpy as np
+from src.utils.logger import get_logger
+
+logger = get_logger(__name__, level="INFO")
 
 fake = Faker()
 
@@ -27,7 +30,7 @@ def generate_catalog(n_items=250):
         sub = random.choice(CATEGORIES[cat])
         price = float(np.random.lognormal(mean=3.5, sigma=0.75))
         quality = round(random.random(), 3)
-        # популярность как Poisson: lambda = 20 + 80*quality
+        # Popularity as Poisson: lambda = 20 + 80*quality
         pop = np.random.poisson(lam=20 + 80*quality)
         release = start_date + timedelta(days=random.randint(0, 730))
         rows.append({
@@ -54,5 +57,5 @@ def save_to_csv(rows, path="data/catalog.csv"):
 
 if __name__ == "__main__":
     catalog = generate_catalog()
-    save_to_csv(catalog, "src/data/catalog.csv")
-    print(f"Catalog generated: {len(catalog)} items → data/catalog.csv")
+    save_to_csv(catalog, "data/catalog.csv")
+    logger.info(f"Catalog generated: {len(catalog)} items → data/catalog.csv")

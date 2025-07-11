@@ -1,164 +1,188 @@
 # SimShop: RL Recommender System with Simulated Users
 
-**SimShop** is a research-oriented pet project that simulates user behavior in an e-commerce environment and trains a recommender agent using reinforcement learning. The project is visualized with Streamlit to observe real-time interactions between simulated users and recommenders.
+**SimShop** is a research-oriented project that simulates user behavior in an e-commerce environment and trains a recommender agent using reinforcement learning. The project features a Streamlit interface for real-time visualization of user-recommender interactions and comprehensive evaluation metrics.
 
 ---
 
-## 📌 Project Goals
+## 📌 Project Status
 
-- Create a simulated environment for user–recommender interaction.
-- Implement rule-based and RL-based user agents.
-- Compare baseline and RL-based recommendation strategies.
-- Visualize learning and decision-making in real-time with Streamlit.
+✅ **Implemented Components:**
+- ✅ Product catalog with 250 diverse items (10 categories, multiple brands/colors)
+- ✅ Six distinct user behavior models with realistic preferences
+- ✅ Gymnasium-compatible environment for RL training
+- ✅ Three recommender systems (Random, Popularity, RL-based)
+- ✅ PPO-based RL agent with custom policy architecture
+- ✅ Streamlit interface for interactive demonstrations
+- ✅ Comprehensive evaluation framework with metrics tracking
+- ✅ Weights & Biases integration for experiment tracking
+- ✅ Training and evaluation scripts with CLI interface
 
 ---
 
-## 🧠 Project Components
+## 🧠 Implemented Components
 
 ### Product Catalog
-A generated catalog of 100–300 items with attributes:
-- Category
-- Price
-- Color
-- Brand
-- Popularity
+A generated catalog of **250 items** with rich attributes:
+- **Categories**: Home, Beauty, Sports, Books, Clothing, Electronics, Toys
+- **Attributes**: Price, quality score, brand, color, popularity, release date
+- **Brands**: 15 different brands (BrandA through BrandO)
+- **Colors**: White, Blue, Red, Green, Yellow, Black
 
-### Simulated Users
-Several rule-based users with different preferences.  
-Examples:
-- Prefers cheap and blue-colored products
-- Ignores a product initially but may buy it after repeated exposure
-- Chooses based on price-to-quality ratio
+### Simulated Users (6 Implemented Types)
+- **CheapSeekerUser**: Prefers low-priced items with price-based utility
+- **BrandLoverUser**: Has specific brand and color preferences  
+- **ValueOptimizerUser**: Balances price and quality for optimal value
+- **RandomChooserUser**: Makes random decisions with configurable noise
+- **FamiliaritySeekerUser**: Requires repeated exposure before showing interest
+- **FreshnessLookerUser**: Prefers newer items based on release date recency
 
 ### Recommender Systems
-- **Baseline**: Random, popularity-based, or filtered.
-- **RL Recommender**: Learns from user feedback to improve over time.
+- **RandomRecommender**: Baseline random selection
+- **PopularityRecommender**: Recommends based on item popularity scores
+- **RLRecommender**: PPO-based agent with custom multi-input policy and embedding layers
+
+### Interactive Environment
+- **ShopEnv**: Gymnasium-compatible environment with:
+  - Multi-user support with user embeddings
+  - Rich observation space (user profile, item features, interaction history)
+  - Reward based on click-through and buy-through rates
+  - Configurable episode termination criteria
 
 ### Streamlit Interface
-Visualizes:
-- Recommendations
-- User responses
-- Reward statistics and CTR
-- Ongoing training process
+Real-time visualization featuring:
+- User type and recommender selection
+- Live recommendation display with user reactions
+- Performance metrics (CTR, BTR, rewards)
+- Session state management and environment reset
 
 ---
 
 ## 🔁 Agent Interaction Flow
 
-1. Recommender suggests 3 products.
-2. Simulated user reacts (click, purchase, ignore).
-3. System updates reward metrics.
-4. RL agent gradually adapts to improve recommendations.
+1. **Environment Setup**: User type and recommender are selected
+2. **Recommendation**: Agent suggests items from candidate pool
+3. **User Reaction**: Simulated user clicks/buys based on utility function
+4. **Reward Calculation**: System computes reward from CTR/BTR metrics
+5. **State Update**: Environment updates history and candidate pool
+6. **Learning**: RL agent adapts policy based on accumulated experience
 
 ---
 
-## 🛠 Installation
+## 🛠 Installation & Setup
 
 ```bash
-git clone https://github.com/your-username/simshop.git
+git clone https://github.com/ernestknurov/simshop.git
 cd simshop
-pip install -r requirements.txt
+
+# Install dependencies with uv (recommended)
+uv sync
+
+# Or with pip
+pip install -e .
 ```
 
 ---
 
-## 🚀 Run the Streamlit Interface
+## 🚀 Usage
 
+### Run Streamlit Interface
 ```bash
-streamlit run streamlit_app.py
+make run
+# or
+uv run python -m streamlit run src/interface/app.py
+```
+
+### Train RL Model
+```bash
+make train ARGS="--total-timesteps 100000 --save-model-path models/my_model.zip"
+# or
+uv run python -m src.scripts.train --total-timesteps 100000
+```
+
+### Evaluate Models
+```bash
+make evaluate ARGS="--rl-model-path models/ppo_latest.zip --eval-episodes 1000"
+# or
+uv run python -m src.scripts.evaluate --rl-model-path models/ppo_latest.zip
 ```
 
 ---
 
-## 📊 Possible Experiments
-
-- Compare different recommenders for different user types
-- Track how RL agent behavior evolves over time
-- Analyze agent performance as catalog or preferences change
-
----
-
-## 📁 Project Structure
+## 📁 Current Project Structure
 
 ```
-simshop/                        # корень репозитория
+simshop/
+├── pyproject.toml             # Dependencies and package metadata
+├── Makefile                   # Common commands (run, train, evaluate)
+├── README.md                  # This file
+├── uv.lock                    # Dependency lock file
 │
-├── pyproject.toml              # метаданные пакета, зависимости, entry-points
-├── README.md                   # витрина проекта (уже есть)
-├── LICENSE                     # MIT / Apache-2.0
-├── .gitignore
-├── .pre-commit-config.yaml     # black, isort, flake8, mypy и т.п.
-├── Makefile                    # типовые таски: lint, test, run, docker-build…
-├── docker/
-│   └── Dockerfile              # прод-образ + dev-образ (много-stage)           
+├── src/
+│   ├── config/
+│   │   └── config.py          # Configuration management
+│   ├── data/
+│   │   └── encoders.py        # Item encoding utilities
+│   ├── env/
+│   │   └── interaction_env.py # Gymnasium environment
+│   ├── interface/
+│   │   └── app.py             # Streamlit application
+│   ├── models/
+│   │   └── policies.py        # Custom RL policies
+│   ├── recommenders/
+│   │   ├── baseline.py        # Random & Popularity recommenders
+│   │   └── advanced.py        # RL-based recommender
+│   ├── scripts/
+│   │   ├── train.py           # Training script with W&B integration
+│   │   └── evaluate.py        # Evaluation script
+│   ├── users/
+│   │   ├── base.py            # Abstract User class
+│   │   ├── cheap_seeker.py    # Price-sensitive user
+│   │   ├── brand_lover.py     # Brand-preference user
+│   │   ├── value_optimizer.py # Quality-price balanced user
+│   │   ├── random_chooser.py  # Random decision user
+│   │   ├── familiarity_seeker.py # Repeat-exposure user
+│   │   └── freshness_looker.py # Recency-preference user
+│   └── utils/                 # Helper functions
+│       ├── utils.py           # General utilities
+│       ├── callbacks.py       # W&B callbacks for logging
+│       └── logger.py          # logger setup
 │
-├── src/                        # «src-layout» избегает конфликтов имён
-│   └── simshop/                # одноимённый Python-пакет
-│       ├── __init__.py
-│       │
-│       ├── catalog/            # генерация и загрузка каталога
-│       │   ├── generator.py
-│       │   └── catalog.csv     # git-lfs / dvc → data/ если большой
-│       │
-│       ├── users/              # симулированные пользователи
-│       │   ├── base.py         # абстрактный класс User
-│       │   ├── cheap_seeker.py
-│       │   ├── repeat_clicker.py
-│       │   └── __init__.py
-│       │
-│       ├── recommenders/       # агенты
-│       │   ├── baseline.py
-│       │   ├── rl_agent.py
-│       │   └── __init__.py
-│       │
-│       ├── env/                # gym-подобная среда взаимодействия
-│       │   ├── interaction_env.py
-│       │   └── reward_schemes.py
-│       │
-│       ├── training/           # RL loops, callbacks, SB3 wrappers
-│       │   ├── train_rl.py
-│       │   └── evaluation.py
-│       │
-│       ├── interface/          # Streamlit & загрузка моделей
-│       │   ├── app.py
-│       │   └── plots.py
-│       │
-│       ├── utils/              # общие хелперы (логгер, конфиги, seed setup)
-│       └── config/             # pydantic / YAML-конфиги (paths, hyperparams)
-│
-├── tests/                      # pytest --cov
-│   ├── conftest.py
-│   ├── test_users.py
-│   ├── test_env.py
-│   └── test_recommenders.py
-│
-├── notebooks/                  # аналитика, прототипы (не в production-code)
-│   └── 01_exploration.ipynb
-│
-├── data/                       # версионируется dvc / git-lfs
-│   ├── raw/
-│   └── processed/
-│
-├── docs/                       # mkdocs или Sphinx (API-docs, статьи)
-│   ├── index.md
-│   └── architecture.md
-│
-└── .github/
-    ├── workflows/
-    │   ├── ci.yml              # lint + unit + type-check
-    │   └── deploy_streamlit.yml# build & push Docker image
-    └── ISSUE_TEMPLATE.md
+└── notebooks/                 # Jupyter analysis notebooks
 ```
 
 ---
 
 ## ⚙️ Tech Stack
 
-- Python
-- Streamlit
-- NumPy / Pandas
-- PyTorch or Stable-Baselines3 (for RL)
-- Matplotlib / Seaborn (for analysis)
+- **Python 3.12+** with modern dependency management (uv)
+- **Gymnasium** for RL environment interface
+- **Stable-Baselines3** for PPO implementation
+- **Streamlit** for interactive web interface
+- **PyTorch** for neural network components
+- **Pandas/NumPy** for data manipulation
+- **Weights & Biases** for experiment tracking
+- **Faker** for synthetic data generation
+
+---
+
+## 🔬 Research Features
+
+- **Multi-user RL training**: Simultaneous training across diverse user types
+- **Custom policy architecture**: Top-K selection with embedding layers
+- **Comprehensive metrics**: CTR, BTR, reward tracking with statistical analysis
+- **Behavioral modeling**: Realistic user preferences with noise and memory
+- **Experiment tracking**: Full W&B integration with model artifacts
+
+---
+
+## 📈 Future Enhancements
+
+- [ ] More sophisticated user models (seasonal preferences, fatigue)
+- [ ] Multi-armed bandit baselines for comparison
+- [ ] Advanced RL algorithms (A2C, SAC, DQN variants)
+- [ ] Cold-start problem simulation
+- [ ] Real-world dataset integration
+- [ ] A/B testing framework
 
 ---
 
@@ -166,7 +190,7 @@ simshop/                        # корень репозитория
 
 Ernest Knurov  
 ML Engineer & RL Enthusiast  
-[GitHub](https://github.com/your-username) • [LinkedIn](https://linkedin.com/in/your-profile)
+[GitHub](https://github.com/ernestknurov) • [LinkedIn](https://linkedin.com/in/ernestknurov)
 
 ---
 
