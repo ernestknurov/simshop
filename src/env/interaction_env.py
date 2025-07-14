@@ -26,7 +26,8 @@ class ShopEnv(gym.Env):
         self.cat_features = config.get("catalog")["cat_features"]
  
         self.num_features = config.get("catalog")["num_features"]
-        self.encoded_items, self.vocab_mappings = encode_items_with_embeddings(items, self.cat_features)
+        items_decay_rate = config.get("user_params")["freshness_looker"]["decay_rate"]
+        self.encoded_items, self.vocab_mappings = encode_items_with_embeddings(items, self.cat_features, items_decay_rate)
         self.one_hot_user = user_to_one_hot(self.user.username, config.get("users_list"))
 
         self.num_candidates = config.get('num_candidates')

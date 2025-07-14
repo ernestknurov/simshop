@@ -33,7 +33,7 @@ class Config:
                 "value_optimizer": {"click_threshold": 0.7, "buy_threshold": 0.85},
                 "familiarity_seeker": {"click_threshold": 0.6, "buy_threshold": 0.80},
                 "random_chooser": {"click_threshold": 0.85, "buy_threshold": 0.97},
-                "freshness_looker": {"click_threshold": 0.80, "buy_threshold": 0.95},
+                "freshness_looker": {"click_threshold": 0.40, "buy_threshold": 0.65, "decay_rate": 0.005},
             },
             "users_list": [
                 "cheap_seeker",
@@ -57,8 +57,8 @@ class Config:
             "catalog_path": "data/catalog.csv",
             "features_extractor_kwargs": {"features_dim": 256},
             "net_arch": dict(
-                pi=[128, 128],  
-                vf=[128, 128]
+                pi=[256, 256],  
+                vf=[256, 256]
             ),
         }
 

@@ -33,7 +33,7 @@ def parse_args():
     parser.add_argument(
         "--save-model-path",
         type=str,
-        default="src/models/rl_recommender.zip",
+        default="models/rl_recommender.zip",
         help="Path to save the trained model (default: src/models/rl_recommender.zip)"
     )
     parser.add_argument(
@@ -66,7 +66,7 @@ def train():
     logger.info(f"Model will be saved to: {args.save_model_path}")
     
     config = Config()
-    catalog = load_catalog(config.get("catalog_path"))#.sample(50, random_state=42)
+    catalog = load_catalog(config.get("catalog_path"))
 
     env_params = {
         "catalog": catalog,
