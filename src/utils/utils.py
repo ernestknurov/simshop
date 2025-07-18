@@ -6,10 +6,10 @@ from src.config import Config
 
 config = Config()
 
-def load_catalog(path: str) -> pd.DataFrame:
+def load_catalog(path: str, size: int) -> pd.DataFrame:
     df = pd.read_csv(path, parse_dates=['release_date'])
     df['days_since_release'] = (pd.Timestamp.now() - df['release_date']).dt.days
-    return df
+    return df.sample(size)
 
 def action_to_indices(action):
     """

@@ -34,14 +34,14 @@ def parse_args():
     parser.add_argument(
         "--rl-model-path",
         type=str,
-        default="src/models/rl_recommender.zip",
-        help="Path to load the trained rl model (default: src/models/rl_recommender.zip)"
+        default="models/rl_recommender.zip",
+        help="Path to load the trained rl model (default: models/rl_recommender.zip)"
     )
     parser.add_argument(
         "--results-path",
         type=str,
-        default=f"src/metrics/recommender_comparison_{datetime.now().strftime('%Y_%m_%d-%H_%M')}.csv",
-        help="Path to save the evaluation metrics (default: src/metrics/recommender_comparison_{current_data}.csv)"
+        default=f"metrics/recommender_comparison_{datetime.now().strftime('%Y_%m_%d-%H_%M')}.csv",
+        help="Path to save the evaluation metrics (default: metrics/recommender_comparison_{current_data}.csv)"
     )
     parser.add_argument(
         "--verbose",
@@ -91,7 +91,7 @@ def main():
     logger.info(f"Metrics will be saved to: {args.results_path}")
 
     config = Config()
-    catalog = load_catalog(config.get("catalog_path"))#.sample(50, random_state=42)
+    catalog = load_catalog(config.get("catalog_path"), 250)#.sample(50, random_state=42)
 
     name_to_recommender = {
         "random": RandomRecommender(),

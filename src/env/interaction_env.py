@@ -84,6 +84,7 @@ class ShopEnv(gym.Env):
             "buy_count": 0,
             "last_click_item": None,
             "consecutive_no_click_pages": 0,
+            # "num_items_to_show": -1
         }
         if self.episode_count % 10 == 0: # HARDCODED
             self.user.reset()
@@ -100,7 +101,8 @@ class ShopEnv(gym.Env):
     def _get_candidates(self) -> pd.DataFrame:
         """Retrieve current candidate items."""
         # choose random candidates from available items
-        available_items = self.encoded_items[~self.encoded_items.product_id.isin(self.shown_items)]
+        available_items = self.encoded_items
+        # available_items = self.encoded_items[~self.encoded_items.product_id.isin(self.shown_items)]
         candidates = available_items.sample(n=self.num_candidates, replace=False)
         return candidates.reset_index(drop=True)
     
@@ -125,12 +127,20 @@ class ShopEnv(gym.Env):
         # TAKE ACTION
         action_indices = np.where(action)[0]
         items_to_show = self.candidates.loc[action_indices] # encoded items
+        if not len(items_to_show):
+            print("[WARNING] Items to show len is null")
         items_to_show = self.items.loc[self.items['product_id'].isin(items_to_show['product_id'])].reset_index(drop=True) # original items
-        clicked_items, bought_items = self.user.react(items_to_show)
+        clicked_items, bought_items, utility_scores = self.user.react(items_to_show)
 
         # REWARD CALCULATION
+        utility_score_weight = 0.1
+        if len(utility_scores):
+            utility_reward = utility_score_weight * max(utility_scores)
+        else:
+            utility_reward = 0
+            print("[WARNING] Utitility scores are null")
         ctr, btr = clicked_items.mean(), bought_items.mean()
-        reward = self.click_weight * ctr + self.buy_weight * btr
+        reward = self.click_weight * ctr + self.buy_weight * btr + utility_reward
         if ctr == 0:
             reward -= 0.1  # small penalty for no clicks
         info = {
@@ -167,6 +177,7 @@ class ShopEnv(gym.Env):
             self.history["consecutive_no_click_pages"] += 1
         if btr > 0:
             self.history["buy_count"] += sum(bought_items)
+        # self.history['num_items_to_show'] = len(items_to_show)
         
         # DONE CONDITIONS
         done_conditions = [

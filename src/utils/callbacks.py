@@ -1,8 +1,20 @@
 import wandb
+import torch
 import numpy as np
 from stable_baselines3.common.callbacks import BaseCallback
 
+class NaNCallback(BaseCallback):
+    def __init__(self, verbose=0):
+        super(NaNCallback, self).__init__(verbose)
 
+    def _on_step(self) -> bool:
+        # Check model parameters for NaN
+        for name, param in self.model.policy.named_parameters():
+            if torch.isnan(param).any():
+                print(f"NaN detected in parameter: {name}")
+                return False
+        return True
+    
 class WandbCallback(BaseCallback):
     """
     Custom callback for logging metrics to Weights & Biases during training.
@@ -71,6 +83,8 @@ class WandbCallback(BaseCallback):
                             'env/mean_page_count_100': np.mean(self.page_count[-100:]),
                             'env/mean_consecutive_no_click_pages_100': np.mean(self.consecutive_no_click_pages[-100:])
                         })
+                    if "recommended_items" in info:
+                        env_metrics['env/len_items_to_show'] = len(info["recommended_items"])
                     
                     if env_metrics:
                         wandb.log(env_metrics)
@@ -115,3 +129,38 @@ class WandbCallback(BaseCallback):
                 print(f"Episode {self.episode_count}: Reward={episode_reward:.3f}, Length={episode_length}, Mean(100)={mean_reward:.3f}")
             
         return True
+
+class LogProbCallback(BaseCallback):
+    """
+    Callback for logging the mean (and recording history) of action log-probabilities
+    at the end of each rollout.
+    """
+    def __init__(self, verbose=0):
+        super().__init__(verbose)
+        self.mean_log_probs = []
+
+    def _on_step(self) -> bool:
+        # This must be implemented, SB3 calls it every environment step.
+        # Returning True means “keep the training going”.
+        return True
+
+    def _on_rollout_end(self) -> None:
+        # Called at the end of each rollout (before update).
+        # rollout_buffer.log_probs: Tensor of shape (n_steps * n_envs,)
+        log_probs = self.model.rollout_buffer.log_probs
+        # Move to CPU and numpy
+        lp = log_probs.cpu().numpy() if hasattr(log_probs, "cpu") else np.array(log_probs)
+        mean_lp = float(np.mean(lp))
+        self.mean_log_probs.append(mean_lp)
+
+        if self.verbose:
+            print(f"[LogProbCallback] Mean log_prob this rollout: {mean_lp:.4f}")
+
+    def _on_training_end(self) -> None:
+        # At the very end of training, save the history to disk
+        try:
+            np.save("mean_log_probs.npy", np.array(self.mean_log_probs))
+            if self.verbose:
+                print(f"[LogProbCallback] Saved mean_log_probs.npy with {len(self.mean_log_probs)} entries.")
+        except Exception as e:
+            print(f"[LogProbCallback] Failed to save log_probs history: {e}")

@@ -15,7 +15,8 @@ from src.utils import (
     username_to_user
 )
 from src.utils.logger import get_logger
-from src.utils.callbacks import WandbCallback
+from src.utils.callbacks import WandbCallback, NaNCallback, LogProbCallback
+from stable_baselines3.common.callbacks import CallbackList
 
 logger = get_logger(__name__, level="DEBUG")
 
@@ -66,22 +67,23 @@ def train():
     logger.info(f"Model will be saved to: {args.save_model_path}")
     
     config = Config()
-    catalog = load_catalog(config.get("catalog_path"))
+    catalog = load_catalog(config.get("catalog_path"), config.get("catalog_size"))
 
     env_params = {
         "catalog": catalog,
         "username_to_user": username_to_user,
         "users_subset": [
             "cheap_seeker",
-            "brand_lover",
+            # "brand_lover",
             # "random_chooser",
-            "value_optimizer",
+            # "value_optimizer",
             # "familiarity_seeker",
-            "freshness_looker"
+            # "freshness_looker"
         ]
     }
 
     rl_recommender = RLRecommender()
+    # rl_recommender.load_model("models/checkpoint_200k")
     
     # Initialize Weights & Biases
     if not args.no_wandb:
@@ -99,11 +101,13 @@ def train():
             tags=["rl", "recommender", "training"]
         )
     
+    combined_callback = CallbackList([WandbCallback(verbose=0), NaNCallback(verbose=0), LogProbCallback(1)])
+    
     rl_recommender.train(
         env_params=env_params,
         num_recommendations=config.get("num_recommendations"),
         total_timesteps=args.total_timesteps,
-        callback=WandbCallback(verbose=0) if not args.no_wandb else None
+        callback=combined_callback #WandbCallback(verbose=0) if not args.no_wandb else None
     )
     
     # Save model first

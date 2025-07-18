@@ -2,13 +2,15 @@ import numpy as np
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.evaluation import evaluate_policy
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecNormalize
 from stable_baselines3.common.monitor import Monitor
 
 from src.env import ShopEnv
 from src.models.policies import TopKMultiInputPolicy, EmbeddingItemEncoder
 from src.utils.logger import get_logger
 from src.config import Config
+
+import torch
 
 logger = get_logger(__name__, level="DEBUG")
 config = Config()
@@ -25,7 +27,8 @@ class RLRecommender:
                 user=env_params['username_to_user'][username]
                 ))
 
-        self.vec_env = SubprocVecEnv([make_env(username) for username in env_params['users_subset']*2]) # 3 * 2 = 6
+        self.vec_env = SubprocVecEnv([make_env(username) for username in env_params['users_subset']*8]) 
+        # self.vec_env = VecNormalize(self.vec_env, norm_obs=True, norm_reward=True)
         
         policy_kwargs = {
             "k": num_recommendations,
@@ -37,12 +40,26 @@ class RLRecommender:
         
         self.model = PPO(
             TopKMultiInputPolicy,
+            # "MultiInputPolicy",
             self.vec_env,
             verbose=1,
             policy_kwargs=policy_kwargs,
-            # n_steps=4096,
-            # batch_size=256,
-            # n_epochs=10,
+                # === rollout / batch settings ===
+            n_steps=512,          # 512×8 = 4 096 samples per update
+            batch_size=256,       # 4 096/256 = 16 minibatches per epoch
+            n_epochs=10,          # 16×10 = 160 gradient steps per update
+
+            # === optimization ===
+            learning_rate=3e-4,   # default “3e-4” works well for ~10⁵ parameters
+            clip_range=0.2,       # PPO clipping ε
+            gamma=0.99,           # discount factor
+            gae_lambda=0.95,      # GAE smoothing
+
+            # === losses / regularization ===
+            ent_coef=0.0,         # you can raise to ~1e-2 if you need more exploration
+            vf_coef=0.5,          # value function loss weight
+            max_grad_norm=0.5     # gradient clipping
+            
         )
 
         # Debug: Print model architecture
@@ -66,6 +83,7 @@ class RLRecommender:
     def load_model(self, model_path: str, **kwargs):
         # print(f"Loading model from {model_path}")
         self.model = PPO.load(model_path, policy=TopKMultiInputPolicy, **kwargs)
+        # self.model = PPO.load(model_path, policy="MultiInputPolicy", **kwargs)
 
     def save_model(self, model_path: str, **kwargs):
         logger.info(f"Saving model to {model_path}")

@@ -42,7 +42,7 @@ class User:
         self.click_threshold = click_threshold
         self.buy_threshold = buy_threshold
 
-    def react(self, items: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
+    def react(self, items: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Simulate user reactions to a set of recommended items.
         
@@ -72,15 +72,8 @@ class User:
         buy_prob = np.clip((scores - self.click_threshold) / span, 0, 1)
         bought = ((np.random.rand(len(scores)) < buy_prob) & (clicked == 1)).astype(np.uint8)
 
-        return clicked, bought
-        # items = items.copy()
-        # items['score'] = self.utility(items)
-        # items['clicked'] = (items['score'] >= self.click_threshold).astype(int)
-        # span = self.buy_threshold - self.click_threshold
-        # items['bought_prob'] = ((items['score'] - self.click_threshold) / span).clip(0, 1)
-        # items['bought'] = (np.random.rand(len(items)) < items['bought_prob']).astype(int)
+        return clicked, bought, scores.to_numpy()
 
-        # return items['clicked'].to_numpy(), items['bought'].to_numpy()
     
     def utility(self, items: pd.DataFrame) -> pd.Series:
         """
