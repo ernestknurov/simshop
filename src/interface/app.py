@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
+import random
 from typing import Dict, Any, List
 
 from src.env import ShopEnv
@@ -14,13 +16,17 @@ from src.utils import (
     username_to_user
 )
 
+config = Config()
+
 # Constants
-MODEL_PATH = 'src/models/rl_recommender.zip'
-CATALOG_PATH = 'src/data/catalog.csv'
-USER_TYPES = ["cheap_seeker", "brand_lover", "random_chooser", "value_optimizer", "familiarity_seeker"]
-RECOMMENDER_TYPES = ["random", "popularity", "rl"]
+MODEL_PATH = config.get("paths")["model_path"]
+CATALOG_PATH = config.get("paths")["catalog_path"]
+USER_TYPES = config.get("users_list")
+RECOMMENDER_TYPES = config.get("recommenders_list")
 DEFAULT_USER = "cheap_seeker"
 DEFAULT_RECOMMENDER = "random"
+NUM_RECOMMENDATIONS = config.get("num_recommendations")
+
 
 # ============================================================================
 # Helper Functions
@@ -75,7 +81,7 @@ def reset_env() -> None:
     """
     Reset the environment to its initial state.
     """
-    items = load_catalog(CATALOG_PATH)
+    items = load_catalog(CATALOG_PATH, config.get("catalog_size"))
     st.session_state.env = ShopEnv(items, st.session_state.user)
     st.session_state.state, _ = st.session_state.env.reset()  # Initial state
     st.session_state.done = False
@@ -118,6 +124,7 @@ def initialize_session_state() -> None:
         st.session_state.rl_model_loaded = False
         st.session_state.user = username_to_user[DEFAULT_USER]
         st.session_state.recommender = st.session_state.name_to_recommender[DEFAULT_RECOMMENDER]
+        st.session_state.product_id_to_emoji = {}
         reset_env()  # Initialize environment and state
         st.session_state.initialized = True
 
@@ -145,7 +152,7 @@ def update_settings(user_type: str, recommender_type: str) -> bool:
 
 def display_recommendations(recommendations, clicked_idxs, bought_idxs):
     """
-    Display the recommendations with highlighting for clicked and bought items.
+    Display the recommendations as item cards with highlighting for clicked and bought items.
     
     Args:
         recommendations: DataFrame of recommended items
@@ -153,11 +160,68 @@ def display_recommendations(recommendations, clicked_idxs, bought_idxs):
         bought_idxs: List of product IDs that were bought
     """
     st.write("## Recommendations")
-    styled_recommendations = recommendations.style.apply(
-        lambda row: highlight_row(row, clicked_idxs, bought_idxs), 
-        axis=1
-    )
-    st.dataframe(styled_recommendations, use_container_width=True, hide_index=True)
+
+    # A list of emojis to be randomly assigned to products
+    EMOJI_LIST = [
+        "🍎", "🍌", "🍇", "🍓", "🥝", "🥥", "🍍", "🥭", "🍑", "🍒",
+        "🌶️", "🫑", "🌽", "🥕", "🥑", "🍆", "🥔", "🥦", "🥬", "🥒",
+        "🍔", "🍕", "🍟", "🌭", "🍿", "🥐", "🍞", "🥖", "🥨", "🥯",
+        "👕", "👖", "👚", "👗", "👔", "👘", "👠", "👡", "👢", "👟",
+        "🧢", "👒", "🕶️", "👜", "🎒", "⌚", "📱", "💻", "🖥️", "🖱️",
+    ]
+
+    num_recommendations = len(recommendations)
+    num_columns = 5  # Number of columns to display
+    num_rows = num_recommendations // num_columns + (1 if num_recommendations % num_columns > 0 else 0)
+    grid = [st.columns(num_columns, gap="small") for _ in range(num_rows)]
+
+    for i, row in recommendations.iterrows():
+        is_clicked = row.product_id in clicked_idxs
+        is_bought = row.product_id in bought_idxs
+
+        tile = grid[i // num_columns][i % num_columns]
+        
+        # Assign a random emoji to the product if it doesn't have one yet
+        if row.product_id not in st.session_state.product_id_to_emoji:
+            st.session_state.product_id_to_emoji[row.product_id] = random.choice(EMOJI_LIST)
+        
+        product_emoji = st.session_state.product_id_to_emoji[row.product_id]
+
+        # Define card style based on clicked/bought status
+        border_style = "border: 2px solid #4CAF50;" if is_bought else ("border: 2px solid #FFD700;" if is_clicked else "border: 1px solid #e0e0e0;")
+        bg_style = "background-color: #f9fff9;" if is_bought else ("background-color: #fffff9;" if is_clicked else "background-color: #ffffff;")
+        
+        html_content = f"""
+        <div style="{border_style} {bg_style} border-radius: 8px; padding: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 10px; height: 100%;">
+            <div style="position: relative; text-align: center;">
+                <div style="font-size: 80px; line-height: 100px; height: 100px; border-radius: 6px; background-color: #f0f0f0;">
+                    {product_emoji}
+                </div>
+                <div style="position: absolute; top: 0; right: 0; background-color: rgba(0,0,0,0.6); color: white; padding: 2px 6px; border-radius: 0 0 0 6px; font-size: 0.8em;">
+                    ${row['price']:.2f}
+                </div>
+            </div>
+            
+            <h4 style="margin: 6px 0 2px 0; font-size: 1em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{row['name']}</h4>
+            
+            <table style="width:100%; font-size: 0.75em; border-collapse: collapse; margin-top: 4px;">
+                <tr><td style="color: #666; width: 50%;">ID:</td><td>{row['product_id']}</td></tr>
+                <tr><td style="color: #666;">Quality:</td><td>{row['quality_score']}</td></tr>
+                <tr><td style="color: #666;">Popularity:</td><td>{row['popularity']}</td></tr>
+                <tr><td style="color: #666;">Brand:</td><td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{row['brand']}</td></tr>
+                <tr><td style="color: #666;">Category:</td><td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{row['category']}</td></tr>
+                <tr><td style="color: #666;">Subcategory:</td><td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{row['subcategory']}</td></tr>
+                <tr><td style="color: #666;">Color:</td><td>{row['color']}</td></tr>
+                <tr><td style="color: #666;">Released:</td><td>{row['release_date']}</td></tr>
+            </table>
+            
+            <div style="margin-top: 6px; font-size: 0.7em; color: #555; height: 40px; overflow: hidden; text-overflow: ellipsis;">
+                {row['description']}
+            </div>
+        </div>
+        """
+        with tile:
+            components.html(html_content, height=370)
 
 
 def display_sidebar_info(info, reward, done, clicked_idxs, bought_idxs):
@@ -171,10 +235,10 @@ def display_sidebar_info(info, reward, done, clicked_idxs, bought_idxs):
         clicked_idxs: List of product IDs that were clicked
         bought_idxs: List of product IDs that were bought
     """
-    with st.sidebar.expander("State information"):
+    with st.sidebar.expander("State information", icon="ℹ️"):
         print_state_info(info['history'])
 
-    with st.sidebar.expander("Step Results"):
+    with st.sidebar.expander("Step Results", icon="📊"):
         st.write("Reward:", reward)
         st.write("Done:", done)
         st.write("Clicked items:", clicked_idxs)
@@ -182,15 +246,14 @@ def display_sidebar_info(info, reward, done, clicked_idxs, bought_idxs):
         st.write("Click Through Rate:", info['click_through_rate'])
         st.write("Buy Through Rate:", info['buy_through_rate'])
 
-    with st.sidebar.expander("Metrics"):
+    with st.sidebar.expander("Metrics", icon="📈"):
         st.write("Coverage:", st.session_state.env.coverage)
         st.write("Click Through Rate (CTR):", st.session_state.env.ctr)
         st.write("Buy Through Rate (BTR):", st.session_state.env.btr)
 
-
 def take_action():
     """Handle the action-taking process and update the UI."""
-    st.session_state.action = st.session_state.recommender.recommend(st.session_state.state)
+    st.session_state.action = st.session_state.recommender.recommend(st.session_state.state, num_recommendations=NUM_RECOMMENDATIONS)
     next_state, reward, done, _, info = st.session_state.env.step(st.session_state.action)
     recommendations = info['recommended_items']
 
@@ -223,15 +286,16 @@ def main():
 
     # Sidebar components
     with st.sidebar:
-        with st.expander("Run settings"):
+        take_action_btn = st.button("Take Action", use_container_width=True)
+        reset_simulation_btn = st.button("Reset Simulation", use_container_width=True)
+
+        with st.expander("Run settings", icon="⚙️"):
             user = st.selectbox("Select User", USER_TYPES)
             recommender = st.selectbox("Select Recommender", RECOMMENDER_TYPES)
             if st.button("Update Settings"):
                 if not update_settings(user, recommender):
                     st.stop()
             
-        take_action_btn = st.button("Take Action")
-        reset_simulation_btn = st.button("Reset Simulation")
 
     # Handle button actions
     if take_action_btn and not st.session_state.done:
@@ -242,6 +306,7 @@ def main():
 
     if reset_simulation_btn:
         reset_env()
+        st.session_state.product_id_to_emoji = {}  # Reset emoji mapping
         st.sidebar.write("Simulation reset")
 
 
