@@ -28,7 +28,7 @@ class Config:
         }
         self._config = {
             "user_params": {
-                "cheap_seeker": {"click_threshold": 0.75, "buy_threshold": 0.85, "pivot_price": 40},
+                "cheap_seeker": {"click_threshold": 0.72, "buy_threshold": 0.85, "pivot_price": 40},
                 "brand_lover": {"click_threshold": 0.30, "buy_threshold": 0.50, "brand_weights": BRAND_WEIGHTS, "color_weights": COLOR_WEIGHTS},
                 "value_optimizer": {"click_threshold": 0.7, "buy_threshold": 0.85},
                 "familiarity_seeker": {"click_threshold": 0.6, "buy_threshold": 0.80},
@@ -43,25 +43,41 @@ class Config:
                 "random_chooser",
                 "freshness_looker"
             ],
+            "recommenders_list": [
+                "random",
+                "popularity",
+                "rl"
+            ],
             "catalog": {
                 "cat_features": ["category", "subcategory", "brand", "color"],
                 "num_features": ['price', 'quality_score', 'popularity', 'days_since_release'],
             },
-            "models": {
-                "model_path": "models/rl_recommender.zip",
+            "paths": {
+                "catalog_path": "data/catalog.csv",
+                "model_path": "models/good_models/best_model.zip",
+            },
+            "reward_weights": {
+                "click": 3.0,
+                "buy": 5.0,
+                "utility": 1.0,
+                "repetition": 0.1,
+                "later_page": 0.1,
+                "no_click": 0.1,
             },
             "num_candidates": 50,
-            "num_recommendations": 10,
-            "catalog_size": 250,
+            "num_recommendations": 5,
+            "catalog_size": 50,
             "n_last_clicks": 5,
-            "catalog_path": "data/catalog.csv",
             "features_extractor_kwargs": {"features_dim": 256},
             "net_arch": dict(
-                pi=[256, 256],  
-                vf=[256, 256]
+                pi=[128, 128],  
+                vf=[128, 128]
             ),
         }
 
+    def __getitem__(self, key: str) -> Any:
+        return self._config[key]
+    
     def get(self, key: str, default: Any=None) -> Any:
         return self._config.get(key, default)
 

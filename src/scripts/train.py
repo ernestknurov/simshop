@@ -16,7 +16,7 @@ from src.utils import (
 )
 from src.utils.logger import get_logger
 from src.utils.callbacks import WandbCallback, NaNCallback, LogProbCallback
-from stable_baselines3.common.callbacks import CallbackList
+from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback
 
 logger = get_logger(__name__, level="DEBUG")
 
@@ -36,6 +36,12 @@ def parse_args():
         type=str,
         default="models/rl_recommender.zip",
         help="Path to save the trained model (default: src/models/rl_recommender.zip)"
+    )
+    parser.add_argument(
+        "--load-model-path",
+        type=str,
+        default=None,
+        help="Path to load a pre-trained model from (optional)"
     )
     parser.add_argument(
         "--wandb-project",
@@ -67,23 +73,27 @@ def train():
     logger.info(f"Model will be saved to: {args.save_model_path}")
     
     config = Config()
-    catalog = load_catalog(config.get("catalog_path"), config.get("catalog_size"))
+    catalog = load_catalog(config.get("paths")["catalog_path"], config.get("catalog_size"))
 
     env_params = {
         "catalog": catalog,
         "username_to_user": username_to_user,
         "users_subset": [
             "cheap_seeker",
-            # "brand_lover",
-            # "random_chooser",
-            # "value_optimizer",
-            # "familiarity_seeker",
-            # "freshness_looker"
+            "brand_lover",
+            "random_chooser",
+            "value_optimizer",
+            "familiarity_seeker",
+            "freshness_looker"
         ]
     }
 
     rl_recommender = RLRecommender()
-    # rl_recommender.load_model("models/checkpoint_200k")
+    
+    # Load pre-trained model if specified
+    if args.load_model_path:
+        rl_recommender.load_model(args.load_model_path)
+        logger.info(f"Loaded pre-trained model from: {args.load_model_path}")
     
     # Initialize Weights & Biases
     if not args.no_wandb:
@@ -100,14 +110,28 @@ def train():
             },
             tags=["rl", "recommender", "training"]
         )
+        
+    callback_list = [NaNCallback(verbose=1), LogProbCallback(0)]
+    if not args.no_wandb:
+        callback_list.append(WandbCallback(verbose=0))
     
-    combined_callback = CallbackList([WandbCallback(verbose=0), NaNCallback(verbose=0), LogProbCallback(1)])
+    # Add checkpoint callback for periodic saving every 8192 steps
+    import os
+    checkpoint_dir = os.path.dirname(args.save_model_path)
+    checkpoint_callback = CheckpointCallback(
+        save_freq=4096, 
+        save_path=checkpoint_dir, 
+        name_prefix="rl_recommender_checkpoint"
+    )
+    callback_list.append(checkpoint_callback)
+    
+    combined_callback = CallbackList(callback_list)
     
     rl_recommender.train(
         env_params=env_params,
         num_recommendations=config.get("num_recommendations"),
         total_timesteps=args.total_timesteps,
-        callback=combined_callback #WandbCallback(verbose=0) if not args.no_wandb else None
+        callback=combined_callback 
     )
     
     # Save model first
@@ -132,14 +156,14 @@ def train():
         # Comprehensive evaluation with bar charts
         logger.info("\nRunning comprehensive evaluation for wandb visualization...")
         results_df = comprehensive_evaluation(
-            catalog=catalog.sample(config.get("catalog_size"), random_state=42),
+            catalog=catalog,
             rl_model_path=args.save_model_path,
             num_episodes=100,
             num_recommendations=config.get("num_recommendations")
         )
         
         # Save evaluation results as artifact
-        results_path = f"src/metrics/evaluation_results_{wandb.run.id}.csv"
+        results_path = f"metrics/evaluation_results_{wandb.run.id}.csv"
         results_df.to_csv(results_path, index=False)
         eval_artifact = wandb.Artifact("evaluation_results", type="dataset")
         eval_artifact.add_file(results_path)
@@ -191,7 +215,6 @@ def comprehensive_evaluation(catalog, rl_model_path, num_episodes=100, num_recom
                 'User': username,
                 'Average Reward': avg_reward
             })
-            # print(f"  {recommender_name} on {username}: {avg_reward:.3f}")
     
     results_df = pd.DataFrame(results)
     
@@ -233,17 +256,6 @@ def comprehensive_evaluation(catalog, rl_model_path, num_episodes=100, num_recom
         )
     })
     
-    
-    # Print summary table
-    # print("\nSummary Results:")
-    # print(pivot_df)
-    # print(f"\nMean across users:")
-    # for recommender in pivot_df.columns:
-    #     mean_val = pivot_df[recommender].mean()
-    #     std_val = pivot_df[recommender].std()
-    #     print(f"  {recommender}: {mean_val:.3f} ± {std_val:.3f}")
-    
-    # print("Comprehensive evaluation completed!")
     return results_df
 
 if __name__ == "__main__":

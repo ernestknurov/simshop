@@ -67,7 +67,6 @@ class User:
 
         clicked = (scores >= self.click_threshold).astype(np.uint8)
 
-        # Avoid unnecessary pandas ops — use vectorized NumPy
         span = self.buy_threshold - self.click_threshold
         buy_prob = np.clip((scores - self.click_threshold) / span, 0, 1)
         bought = ((np.random.rand(len(scores)) < buy_prob) & (clicked == 1)).astype(np.uint8)

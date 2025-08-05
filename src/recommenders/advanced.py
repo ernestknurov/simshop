@@ -10,8 +10,6 @@ from src.models.policies import TopKMultiInputPolicy, EmbeddingItemEncoder
 from src.utils.logger import get_logger
 from src.config import Config
 
-import torch
-
 logger = get_logger(__name__, level="DEBUG")
 config = Config()
 
@@ -27,8 +25,7 @@ class RLRecommender:
                 user=env_params['username_to_user'][username]
                 ))
 
-        self.vec_env = SubprocVecEnv([make_env(username) for username in env_params['users_subset']*8]) 
-        # self.vec_env = VecNormalize(self.vec_env, norm_obs=True, norm_reward=True)
+        self.vec_env = SubprocVecEnv([make_env(username) for username in env_params['users_subset']]) 
         
         policy_kwargs = {
             "k": num_recommendations,
@@ -38,29 +35,35 @@ class RLRecommender:
             "net_arch": config.get("net_arch"),
         }
         
-        self.model = PPO(
-            TopKMultiInputPolicy,
-            # "MultiInputPolicy",
-            self.vec_env,
-            verbose=1,
-            policy_kwargs=policy_kwargs,
-                # === rollout / batch settings ===
-            n_steps=512,          # 512×8 = 4 096 samples per update
-            batch_size=256,       # 4 096/256 = 16 minibatches per epoch
-            n_epochs=10,          # 16×10 = 160 gradient steps per update
+        if not self.model:
+            logger.info("Initializing new RL model")
+            self.model = PPO(
+                TopKMultiInputPolicy,
+                # "MultiInputPolicy",
+                self.vec_env,
+                verbose=1,
+                policy_kwargs=policy_kwargs,
+                    # === rollout / batch settings ===
+                n_steps=512,          # 512×8 = 4 096 samples per update
+                batch_size=256,       # 4 096/256 = 16 minibatches per epoch
+                n_epochs=10,          # 16×10 = 160 gradient steps per update
 
-            # === optimization ===
-            learning_rate=3e-4,   # default “3e-4” works well for ~10⁵ parameters
-            clip_range=0.2,       # PPO clipping ε
-            gamma=0.99,           # discount factor
-            gae_lambda=0.95,      # GAE smoothing
+                # === optimization ===
+                learning_rate=3e-4,   # default "3e-4" works well for ~10⁵ parameters
+                clip_range=0.2,       # PPO clipping ε
+                gamma=0.99,           # discount factor
+                gae_lambda=0.95,      # GAE smoothing
 
-            # === losses / regularization ===
-            ent_coef=0.0,         # you can raise to ~1e-2 if you need more exploration
-            vf_coef=0.5,          # value function loss weight
-            max_grad_norm=0.5     # gradient clipping
-            
-        )
+                # === losses / regularization ===
+                ent_coef=0.0,         # you can raise to ~1e-2 if you need more exploration
+                vf_coef=0.5,          # value function loss weight
+                max_grad_norm=0.5     # gradient clipping
+                
+            )
+        else:
+            logger.info("Using loaded model, setting environment for continued training")
+            # Set the environment for the loaded model
+            self.model.set_env(self.vec_env)
 
         # Debug: Print model architecture
         logger.debug("Model architecture:")
@@ -82,6 +85,7 @@ class RLRecommender:
 
     def load_model(self, model_path: str, **kwargs):
         # print(f"Loading model from {model_path}")
+                
         self.model = PPO.load(model_path, policy=TopKMultiInputPolicy, **kwargs)
         # self.model = PPO.load(model_path, policy="MultiInputPolicy", **kwargs)
 
