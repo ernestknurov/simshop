@@ -73,7 +73,7 @@ def train():
     logger.info(f"Model will be saved to: {args.save_model_path}")
     
     config = Config()
-    catalog = load_catalog(config.get("paths")["catalog_path"], config.get("catalog_size"))
+    catalog = load_catalog(config["paths"]["catalog_path"], config["catalog_size"])
 
     env_params = {
         "catalog": catalog,
@@ -121,7 +121,7 @@ def train():
     checkpoint_callback = CheckpointCallback(
         save_freq=4096, 
         save_path=checkpoint_dir, 
-        name_prefix="rl_recommender_checkpoint"
+        name_prefix=args.save_model_path.split("/")[-1].replace(".zip", ""),
     )
     callback_list.append(checkpoint_callback)
     

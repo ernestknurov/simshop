@@ -14,7 +14,7 @@ config = Config()
 
 class ShopEnv(gym.Env):
     """GYM environment for recommender agent interacting with users."""
-    def __init__(self, items: pd.DataFrame, user: User) -> None:
+    def __init__(self, items: pd.DataFrame, user: User, config: Config=config) -> None:
         """Initialize environment with a user model and item catalog.
         Args:
             items (pd.DataFrame): Catalog of items to recommend.
@@ -47,6 +47,10 @@ class ShopEnv(gym.Env):
         self.repetition_penalty_weight = config['reward_weights']["repetition"]
         self.later_page_penalty_weight = config['reward_weights']["later_page"]
         self.no_clicks_penalty_weight = config['reward_weights']["no_click"]
+
+        self.user_reset_frequency = config["user_reset_frequency"]
+        self.shuffle_frequency = config["shuffle_frequency"]
+        self.shuffle_count = config["shuffle_count"]
 
         # Action is boolean vector with 1s on the ids of chosen items from catalog
         self.action_space = MultiBinary(self.num_candidates)
@@ -91,9 +95,11 @@ class ShopEnv(gym.Env):
             "consecutive_no_click_pages": 0,
             # "num_items_to_show": -1
         }
-        if self.episode_count % 10 == 0: # HARDCODED
+        if self.episode_count % self.user_reset_frequency == 0:
             self.user.reset()
         self.shown_items.clear()
+        if self.episode_count % self.shuffle_frequency == 0:
+            self.encoded_items = self.shuffle_items(self.encoded_items, shuffle_count=self.shuffle_count)
         self.candidates = self._get_candidates()
         self.ctr = 0.0
         self.btr = 0.0
@@ -101,6 +107,19 @@ class ShopEnv(gym.Env):
         self.done = False
 
         return self.get_observation(), {}
+    
+    def shuffle_items(self, items: pd.DataFrame, shuffle_count: int = 1) -> pd.DataFrame:
+        """Shuffle items in the DataFrame."""
+        if shuffle_count <= 0:
+            return items
+        
+        positions_to_shuffle = np.random.choice(len(items), shuffle_count*2, replace=False)
+        for i in range(0, len(positions_to_shuffle), 2):
+            if i+1 < len(positions_to_shuffle):
+                pos1, pos2 = positions_to_shuffle[i], positions_to_shuffle[i+1]
+                items.iloc[[pos1, pos2]] = items.iloc[[pos2, pos1]].values
+        return items.reset_index(drop=True)
+        
     
     def _get_candidates(self) -> pd.DataFrame:
         """Retrieve current candidate items."""

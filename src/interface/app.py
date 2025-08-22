@@ -15,6 +15,7 @@ from src.utils import (
     load_catalog,
     username_to_user
 )
+from src.interface.emoji_mappings import get_emoji_for_product
 
 config = Config()
 
@@ -161,15 +162,6 @@ def display_recommendations(recommendations, clicked_idxs, bought_idxs):
     """
     st.write("## Recommendations")
 
-    # A list of emojis to be randomly assigned to products
-    EMOJI_LIST = [
-        "🍎", "🍌", "🍇", "🍓", "🥝", "🥥", "🍍", "🥭", "🍑", "🍒",
-        "🌶️", "🫑", "🌽", "🥕", "🥑", "🍆", "🥔", "🥦", "🥬", "🥒",
-        "🍔", "🍕", "🍟", "🌭", "🍿", "🥐", "🍞", "🥖", "🥨", "🥯",
-        "👕", "👖", "👚", "👗", "👔", "👘", "👠", "👡", "👢", "👟",
-        "🧢", "👒", "🕶️", "👜", "🎒", "⌚", "📱", "💻", "🖥️", "🖱️",
-    ]
-
     num_recommendations = len(recommendations)
     num_columns = 5  # Number of columns to display
     num_rows = num_recommendations // num_columns + (1 if num_recommendations % num_columns > 0 else 0)
@@ -181,11 +173,8 @@ def display_recommendations(recommendations, clicked_idxs, bought_idxs):
 
         tile = grid[i // num_columns][i % num_columns]
         
-        # Assign a random emoji to the product if it doesn't have one yet
-        if row.product_id not in st.session_state.product_id_to_emoji:
-            st.session_state.product_id_to_emoji[row.product_id] = random.choice(EMOJI_LIST)
-        
-        product_emoji = st.session_state.product_id_to_emoji[row.product_id]
+        # Get category-specific emoji
+        product_emoji = get_emoji_for_product(row['category'], row['subcategory'])
 
         # Define card style based on clicked/bought status
         border_style = "border: 2px solid #4CAF50;" if is_bought else ("border: 2px solid #FFD700;" if is_clicked else "border: 1px solid #e0e0e0;")
@@ -247,7 +236,6 @@ def display_sidebar_info(info, reward, done, clicked_idxs, bought_idxs):
         st.write("Buy Through Rate:", info['buy_through_rate'])
 
     with st.sidebar.expander("Metrics", icon="📈"):
-        st.write("Coverage:", st.session_state.env.coverage)
         st.write("Click Through Rate (CTR):", st.session_state.env.ctr)
         st.write("Buy Through Rate (BTR):", st.session_state.env.btr)
 

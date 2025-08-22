@@ -2,6 +2,8 @@
 
 **SimShop** is a research-oriented project that simulates user behavior in an e-commerce environment and trains a recommender agent using reinforcement learning. The project features a Streamlit interface for real-time visualization of user-recommender interactions and comprehensive evaluation metrics.
 
+![alt text](assets/images/web_interface.png)
+
 ---
 
 ## 📌 Project Status

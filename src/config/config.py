@@ -57,9 +57,9 @@ class Config:
                 "model_path": "models/good_models/best_model.zip",
             },
             "reward_weights": {
+                "utility": 1.0,
                 "click": 3.0,
                 "buy": 5.0,
-                "utility": 1.0,
                 "repetition": 0.1,
                 "later_page": 0.1,
                 "no_click": 0.1,
@@ -68,6 +68,9 @@ class Config:
             "num_recommendations": 5,
             "catalog_size": 50,
             "n_last_clicks": 5,
+            "user_reset_frequency": 10,
+            "shuffle_frequency": 20,
+            "shuffle_count": 2,
             "features_extractor_kwargs": {"features_dim": 256},
             "net_arch": dict(
                 pi=[128, 128],  
@@ -77,6 +80,9 @@ class Config:
 
     def __getitem__(self, key: str) -> Any:
         return self._config[key]
+    
+    def __setitem__(self, key: str, value: Any):
+        self._config[key] = value
     
     def get(self, key: str, default: Any=None) -> Any:
         return self._config.get(key, default)
